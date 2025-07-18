@@ -1,32 +1,38 @@
-name: Fetch price CSV
+name: Scheduled Fetch and Update
 
 on:
   schedule:
-    - cron: '0 9,18 * * *'
-  workflow_dispatch:
+    - cron: "0 8 * * *"   # Run daily at 08:00 UTC (10:00 CET)
+    - cron: "0 20 * * *"  # Run daily at 20:00 UTC (22:00 CET)
+  workflow_dispatch:      # Allow manual run from GitHub UI
 
 jobs:
   fetch:
     runs-on: ubuntu-latest
+
     steps:
-      - uses: actions/checkout@v3
-      - name: Setup Python
-        uses: actions/setup-python@v4
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
         with:
-          python-version: '3.11'
+          python-version: '3.x'
+
       - name: Install dependencies
         run: |
           pip install -r requirements.txt
-      - name: Recover existing DB
-        run: |
-          git checkout origin/main -- data.db || echo "DB non esiste ancora"
+
       - name: Run fetch.py
+        run: python fetch.py
+
+      - name: Configure git user
         run: |
-          python fetch.py
-      - name: Commit DB
+          git config --global user.name "github-actions[bot]"
+          git config --global user.email "41898282+github-actions[bot]@users.noreply.github.com"
+
+      - name: Commit and push data.db
         run: |
-          git config user.name "github-actions[bot]"
-          git config user.email "github-actions[bot]@users.noreply.github.com"
           git add data.db
-          git commit -m "Update DB $(date -u +'%Y-%m-%dT%H:%M:%SZ')" || echo "No changes"
+          git commit -m "Update data.db (auto fetch) [skip ci]" || echo "No changes to commit"
           git push
