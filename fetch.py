@@ -12,7 +12,7 @@ r.encoding = 'cp1252'
 with open('mp.prices.csv', 'w', encoding='cp1252') as f:
     f.write(r.text)
 
-df = pd.read_csv('mp.prices.csv', sep=',', encoding='cp1252')
+df = pd.read_csv('mp.prices.csv', sep=';', encoding='cp1252')
 
 conn = sqlite3.connect(DB_FILENAME)
 
