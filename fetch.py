@@ -20,6 +20,7 @@ conn.execute('''
 CREATE TABLE IF NOT EXISTS price_records (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     sku TEXT,
+    qty INTEGER,
     platform TEXT,
     price REAL,
     discounted_price REAL,
@@ -33,6 +34,7 @@ now = datetime.datetime.utcnow().isoformat()
 
 for _, row in df.iterrows():
     sku = row.get('SKUs')
+    qty = row.get('qty')
     if pd.isna(sku):
         continue
     for platform in ['AMZ_FR', 'Cdiscount', 'Cdiscount_FF', 'LeroyMerlin', 'LeroyMerlin_FF',
@@ -47,10 +49,11 @@ for _, row in df.iterrows():
 
         conn.execute('''
         INSERT INTO price_records
-        (sku, platform, price, discounted_price, discount_start, discount_end, timestamp)
+        (sku, qty, platform, price, discounted_price, discount_start, discount_end, timestamp)
         VALUES (?, ?, ?, ?, ?, ?, ?)
         ''', (
             str(sku),
+            int(qty),
             platform,
             float(base_price) if not pd.isna(base_price) else 0,
             float(promo_price) if not pd.isna(promo_price) else 0,
