@@ -1,0 +1,32 @@
+name: Fetch price CSV
+
+on:
+  schedule:
+    - cron: '0 9,18 * * *'
+  workflow_dispatch:
+
+jobs:
+  fetch:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+      - name: Setup Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.11'
+      - name: Install dependencies
+        run: |
+          pip install -r requirements.txt
+      - name: Recover existing DB
+        run: |
+          git checkout origin/main -- data.db || echo "DB non esiste ancora"
+      - name: Run fetch.py
+        run: |
+          python fetch.py
+      - name: Commit DB
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add data.db
+          git commit -m "Update DB $(date -u +'%Y-%m-%dT%H:%M:%SZ')" || echo "No changes"
+          git push
