@@ -20,7 +20,7 @@ conn.execute('''
 CREATE TABLE IF NOT EXISTS price_records (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     sku TEXT,
-    qty INTEGER,
+    qty INT,
     platform TEXT,
     price REAL,
     discounted_price REAL,
@@ -50,7 +50,7 @@ for _, row in df.iterrows():
         conn.execute('''
         INSERT INTO price_records
         (sku, qty, platform, price, discounted_price, discount_start, discount_end, timestamp)
-        VALUES (?, ?, ?, ?, ?, ?, ?)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?)
         ''', (
             str(sku),
             int(qty),
