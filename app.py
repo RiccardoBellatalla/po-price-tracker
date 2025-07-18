@@ -1,12 +1,8 @@
 from flask import Flask, render_template_string, request
 import sqlite3
-import matplotlib
-matplotlib.use('Agg')
-import matplotlib.pyplot as plt
-import io
-import base64
 import pandas as pd
-import numpy as np
+import plotly.graph_objs as go
+import plotly.offline as pyo
 
 DB_FILENAME = 'data.db'
 
@@ -15,14 +11,16 @@ app = Flask(__name__)
 @app.route('/', methods=['GET', 'POST'])
 def index():
     conn = sqlite3.connect(DB_FILENAME)
-    skus = [row[0] for row in conn.execute("SELECT DISTINCT sku FROM price_records WHERE sku != '' ORDER BY sku").fetchall()]
+    skus = [row[0] for row in conn.execute(
+        "SELECT DISTINCT sku FROM price_records WHERE sku != '' ORDER BY sku"
+    ).fetchall()]
     selected_sku = request.form.get('sku')
-    img_data = None
+    graph_html = None
     table_html = None
 
     if selected_sku:
         query = """
-        SELECT timestamp, platform, price, discounted_price
+        SELECT timestamp, platform, price, discounted_price, discount_start, discount_end
         FROM price_records
         WHERE sku = ?
         ORDER BY timestamp
@@ -34,53 +32,81 @@ def index():
             df['timestamp_dt'] = pd.to_datetime(df['timestamp'])
             df['halfday'] = df['timestamp_dt'].apply(lambda x: 'HD1' if x.hour < 12 else 'HD2')
             df['label'] = df['halfday'] + '-' + df['timestamp_dt'].dt.strftime('%d/%m/%y')
+            df['discount_start'] = pd.to_datetime(df['discount_start'], errors='coerce')
+            df['discount_end'] = pd.to_datetime(df['discount_end'], errors='coerce')
 
-            # Creiamo una mappa label → index per jitter
-            unique_labels = df['label'].unique()
-            label_to_x = {label: idx for idx, label in enumerate(unique_labels)}
+            df['price'] = pd.to_numeric(df['price'], errors='coerce')
+            df['discounted_price'] = pd.to_numeric(df['discounted_price'], errors='coerce')
 
-            fig, ax1 = plt.subplots(figsize=(12, 6))
+            fig = go.Figure()
             platforms = df['platform'].unique()
+            all_y = []
 
-            jitter_width = 0.1  # Offset orizzontale massimo
-            for i, platform in enumerate(platforms):
-                subset = df[df['platform'] == platform]
+            for platform in platforms:
+                df_platform = df[df['platform'] == platform]
 
-                # Filtra price > 0
-                subset_price = subset[subset['price'] > 0]
-                if not subset_price.empty:
-                    x_vals_price = [label_to_x[label] + (i - len(platforms)/2) * jitter_width / len(platforms) for label in subset_price['label']]
-                    ax1.plot(x_vals_price, subset_price['price'], marker='o', linestyle='-', alpha=0.8, label=f'{platform} price')
+                df_price = df_platform[df_platform['price'] > 0]
+                if not df_price.empty:
+                    fig.add_trace(go.Scatter(
+                        x=df_price['timestamp_dt'].tolist(),
+                        y=df_price['price'].astype(float).tolist(),
+                        mode='lines+markers',
+                        name=f'{platform}',
+                        customdata=list(zip(df_price['label'].tolist(), df_price['platform'].tolist())),
+                        hovertemplate=(
+                            "%{customdata[1]} : %{y} €<extra></extra><br>"
+                            "%{customdata[0]}<br>"
+                        )
+                    ))
+                    all_y.extend(df_price['price'].tolist())
 
-                # Filtra discounted_price > 0
-                subset_promo = subset[subset['discounted_price'] > 0]
-                if not subset_promo.empty:
-                    x_vals_promo = [label_to_x[label] + (i - len(platforms)/2) * jitter_width / len(platforms) for label in subset_promo['label']]
-                    ax1.plot(x_vals_promo, subset_promo['discounted_price'], marker='x', linestyle='--', alpha=0.8, label=f'{platform} promo')
+                df_promo = df_platform[
+                    (df_platform['discounted_price'] > 0) &
+                    (df_platform['discount_start'].notnull()) &
+                    (df_platform['discount_end'].notnull()) &
+                    (df_platform['timestamp_dt'] >= df_platform['discount_start']) &
+                    (df_platform['timestamp_dt'] <= df_platform['discount_end'])
+                ]
 
-            ax1.set_xticks(range(len(unique_labels)))
-            ax1.set_xticklabels(unique_labels, rotation=45, ha='right')
-            ax1.set_xlabel('Half-day')
-            ax1.set_ylabel('Prezzo (€)')
-            ax1.legend(loc='upper left')
-            ax1.set_title(f'Evoluzione prezzi per SKU {selected_sku}')
+                if not df_promo.empty:
+                    fig.add_trace(go.Scatter(
+                        x=df_promo['timestamp_dt'].tolist(),
+                        y=df_promo['discounted_price'].astype(float).tolist(),
+                        mode='lines+markers',
+                        name=f'*Promo {platform}',
+                        customdata=list(zip(df_promo['label'].tolist(), df_promo['platform'].tolist())),
+                        hovertemplate=(
+                            "PROMO %{customdata[1]} : %{y} €<extra></extra><br>"
+                            "%{customdata[0]}<br>"
+                        )
+                    ))
+                    all_y.extend(df_promo['discounted_price'].tolist())
 
-            buf = io.BytesIO()
-            plt.savefig(buf, format='png', bbox_inches='tight')
-            buf.seek(0)
-            img_data = base64.b64encode(buf.read()).decode('utf-8')
-            buf.close()
+            if all_y:
+                ymax = max(all_y) * 1.1
+            else:
+                ymax = 1
 
-            # Prepara tabella HTML
-            df_table = df[['label', 'platform', 'price', 'discounted_price']].copy()
+            fig.update_layout(
+                title=f'Evoluzione prezzi per SKU {selected_sku}',
+                xaxis_title='Data',
+                yaxis_title='Prezzo (€)',
+                yaxis=dict(range=[0, ymax]),
+                legend_title='Platform'
+            )
+
+            graph_html = pyo.plot(fig, include_plotlyjs=False, output_type='div')
+
+            df_table = df[['label', 'platform', 'price', 'discounted_price', 'discount_start', 'discount_end']].copy()
             df_table.rename(columns={
                 'label': 'Timestamp',
                 'platform': 'Platform',
                 'price': 'Price (€)',
-                'discounted_price': 'Discounted Price (€)'
+                'discounted_price': 'Discounted Price (€)',
+                'discount_start': 'Discount Start',
+                'discount_end': 'Discount End'
             }, inplace=True)
 
-            # Styling manuale CSS
             table_html = df_table.to_html(index=False, border=1, classes='dataframe', justify='left')
 
             style = '''
@@ -92,11 +118,7 @@ def index():
                 table.dataframe td:nth-child(4) { text-align: right; }
             </style>
             '''
-
             table_html = style + table_html
-
-    else:
-        conn.close()
 
     html = '''
     <h1>Price Tracker</h1>
@@ -109,13 +131,14 @@ def index():
         </select>
         <input type="submit" value="Mostra grafico e tabella">
     </form>
-    {% if img_data %}
-        <img src="data:image/png;base64,{{ img_data }}">
+    {% if graph_html %}
+        <script src="https://cdn.plot.ly/plotly-latest.min.js"></script>
+        {{ graph_html | safe }}
         <h2>Dettaglio dati</h2>
         {{ table_html | safe }}
     {% endif %}
     '''
-    return render_template_string(html, skus=skus, selected_sku=selected_sku, img_data=img_data, table_html=table_html)
+    return render_template_string(html, skus=skus, selected_sku=selected_sku, graph_html=graph_html, table_html=table_html)
 
 if __name__ == '__main__':
     app.run(debug=True)

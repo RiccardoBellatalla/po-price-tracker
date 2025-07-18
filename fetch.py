@@ -31,6 +31,7 @@ CREATE TABLE IF NOT EXISTS price_records (
 ''')
 
 now = datetime.datetime.utcnow().isoformat()
+#now = (datetime.datetime.utcnow() + datetime.timedelta(hours=36)).isoformat()  # da usare quando voglio debuggare per creare entry avanti o indietro nel tempo
 
 for _, row in df.iterrows():
     sku = row.get('SKUs')
