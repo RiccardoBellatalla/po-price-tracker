@@ -2,9 +2,9 @@ name: Scheduled Fetch and Update
 
 on:
   schedule:
-    - cron: "0 8 * * *"   # Run daily at 08:00 UTC (10:00 CET)
-    - cron: "0 20 * * *"  # Run daily at 20:00 UTC (22:00 CET)
-  workflow_dispatch:      # Allow manual run from GitHub UI
+    - cron: "0 6 * * *"
+    - cron: "0 18 * * *"
+  workflow_dispatch:
 
 jobs:
   fetch:
@@ -13,6 +13,8 @@ jobs:
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
+        with:
+          ref: main  # 🔧 checkout su branch main esplicitamente!
 
       - name: Set up Python
         uses: actions/setup-python@v5
@@ -20,8 +22,7 @@ jobs:
           python-version: '3.x'
 
       - name: Install dependencies
-        run: |
-          pip install -r requirements.txt
+        run: pip install -r requirements.txt
 
       - name: Run fetch.py
         run: python fetch.py
@@ -35,4 +36,4 @@ jobs:
         run: |
           git add data.db
           git commit -m "Update data.db (auto fetch) [skip ci]" || echo "No changes to commit"
-          git push
+          git push origin main
