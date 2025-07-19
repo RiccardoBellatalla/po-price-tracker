@@ -13,8 +13,6 @@ jobs:
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
-        with:
-          ref: main
 
       - name: Set up Python
         uses: actions/setup-python@v5
@@ -36,4 +34,4 @@ jobs:
         run: |
           git add data.db
           git commit -m "Update data.db (auto fetch) [skip ci]" || echo "No changes to commit"
-          git push origin main
+          git push origin HEAD:main
