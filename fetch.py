@@ -65,3 +65,4 @@ for _, row in df.iterrows():
 
 conn.commit()
 conn.close()
+#tmp
