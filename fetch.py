@@ -3,7 +3,7 @@ import requests
 import sqlite3
 import datetime
 
-CSV_URL = 'https://www.provence-outillage.fr/csv/marketplace/mp.prices.csv'
+CSV_URL = '/csv/marketplace/mp.prices.csv'
 DB_FILENAME = 'data.db'
 
 # Scarica CSV
